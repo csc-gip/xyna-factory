@@ -39,8 +39,7 @@ jobs:
      - name: build
        run: |
           cd installation
-          # ./build.sh all -b main
-          mkdir -p ../release/XynaFactory-Temp
+          ./build.sh all -b main
 
      - name: Create Archive
        id: create-archive
