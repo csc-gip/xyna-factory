@@ -47,7 +47,7 @@ jobs:
        run: |
           RUNS_AT=$(date -u +"%Y%m%dT%H%M%SZ")
           echo "RUNS_AT=$RUNS_AT" >> "$GITHUB_OUTPUT"
-          tar cf "XynaFactory-NIGHTLY-${RUNS_AT}.tar" --force-local -C release .
+          tar cvf "XynaFactory-NIGHTLY-${RUNS_AT}.tar" --force-local -C release .
           
      - name: Upload Artifact XynaFactory-NIGHTLY-${{ steps.create-archive.outputs.RUNS_AT }}
        uses: actions/upload-artifact@v4
