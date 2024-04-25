@@ -1,6 +1,6 @@
 /*
  * - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
- * Copyright 2023 Xyna GmbH, Germany
+ * Copyright 2024 Xyna GmbH, Germany
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,13 +34,21 @@ import com.gip.xyna.xfmg.xopctrl.managedsessions.SessionManagement;
 import com.gip.xyna.xprc.XynaOrderServerExtension;
 
 import base.File;
+import base.math.IntegerNumber;
 import xfmg.oas.generation.ApplicationGenerationParameter;
 import xfmg.oas.generation.ApplicationGenerationServiceOperation;
 import xfmg.oas.generation.cli.generated.OverallInformationProvider;
 import xfmg.oas.generation.cli.impl.BuildoasapplicationImpl;
 import xfmg.oas.generation.cli.impl.BuildoasapplicationImpl.ValidationResult;
+import xfmg.xfctrl.appmgmt.RuntimeContextService;
 import xfmg.xfctrl.filemgmt.ManagedFileId;
+import xmcp.forms.plugin.Plugin;
+import xprc.xpce.Application;
+import xprc.xpce.RuntimeContext;
+import xprc.xpce.Workspace;
 
+import com.gip.xyna.xfmg.xfctrl.classloading.ClassLoaderBase;
+import com.gip.xyna.xfmg.xfctrl.revisionmgmt.RevisionManagement;
 
 
 public class ApplicationGenerationServiceOperationImpl implements ExtendedDeploymentTask, ApplicationGenerationServiceOperation {
@@ -56,11 +64,27 @@ public class ApplicationGenerationServiceOperationImpl implements ExtendedDeploy
   
   public void onDeployment() throws XynaException {
     OverallInformationProvider.onDeployment();
+    try {
+      Plugin plugin = createPlugin();
+      if (plugin != null) {
+        xmcp.forms.plugin.PluginManagement.registerPlugin(plugin);
+      }
+    } catch (Exception e) {
+      logger.error("Could not register oas plugin.", e);
+    }
   }
 
 
   public void onUndeployment() throws XynaException {
     OverallInformationProvider.onUndeployment();
+    try {
+      Plugin plugin = createPlugin();
+      if (plugin != null) {
+        xmcp.forms.plugin.PluginManagement.unregisterPlugin(plugin);
+      }
+    } catch(Exception e) {
+      logger.error("Could not unregister oas plugin.", e);
+    }
   }
 
 
@@ -71,6 +95,31 @@ public class ApplicationGenerationServiceOperationImpl implements ExtendedDeploy
 
   public BehaviorAfterOnUnDeploymentTimeout getBehaviorAfterOnUnDeploymentTimeout() {
     return null;
+  }
+
+
+  private Plugin createPlugin() {
+    String entryName = "OAS Import";
+    RuntimeContext rtc = getOwnRtc();
+    if (rtc == null) {
+      return null;
+    }
+    if (rtc instanceof Application) {
+      entryName = entryName + " " + ((Application) rtc).getVersion();
+    }
+    Plugin.Builder plugin = new Plugin.Builder();
+    plugin.navigationEntryLabel(entryName);
+    plugin.navigationEntryName(entryName);
+    plugin.definitionWorkflowFQN("xmcp.oas.fman.GetOASImportHistoryDefinition");
+    plugin.pluginRTC(rtc);
+    return plugin.instance();
+  }
+
+
+  private RuntimeContext getOwnRtc() {
+    ClassLoaderBase clb = (ClassLoaderBase) getClass().getClassLoader();
+    Long revision = clb.getRevision();
+    return RuntimeContextService.getRuntimeContextFromRevision(new IntegerNumber(revision));
   }
 
   @Override
@@ -131,8 +180,12 @@ public class ApplicationGenerationServiceOperationImpl implements ExtendedDeploy
   
   @Override
   public void generateApplicationByManagedFileID(XynaOrderServerExtension correlatedXynaOrder, ApplicationGenerationParameter applicationGenerationParameter2, ManagedFileId managedFileId3) {
+    String path = fileManagement.getAbsolutePath(managedFileId3.getId());
+    if(fileManagement.getFileInfo(managedFileId3.getId()).getOriginalFilename().endsWith(".zip")) {
+      path = BuildoasapplicationImpl.decompressArchive(path);
+    }
     File file = new File.Builder()
-        .path(fileManagement.getAbsolutePath(managedFileId3.getId()))
+        .path(path)
         .instance();
     generateApplication(correlatedXynaOrder, applicationGenerationParameter2, file);
   }
